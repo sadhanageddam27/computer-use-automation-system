@@ -1,0 +1,155 @@
+{
+  "name": "open_member_subaccount",
+  "version": 1,
+  "description": "Logs into the member servicing console, looks up a member, and opens a new sub-account of a given type and initial deposit.",
+  "target": {
+    "app": "legacy-bank-mock",
+    "entry_url": "http://localhost:5001/login"
+  },
+  "inputs": {
+    "member_id": {
+      "type": "string",
+      "description": "Input parameter 'member_id'"
+    },
+    "acct_type": {
+      "type": "string",
+      "description": "Input parameter 'acct_type'"
+    },
+    "deposit": {
+      "type": "string",
+      "description": "Input parameter 'deposit'"
+    }
+  },
+  "outputs": {
+    "acct_type": {
+      "type": "string",
+      "description": "Output field 'acct_type'"
+    },
+    "deposit": {
+      "type": "string",
+      "description": "Output field 'deposit'"
+    }
+  },
+  "steps": [
+    {
+      "step_id": "step_00",
+      "action": "navigate",
+      "locator": null,
+      "value": "http://localhost:5001/login",
+      "checkpoint": null
+    },
+    {
+      "step_id": "step_01",
+      "action": "type_text",
+      "locator": {
+        "role": "textbox",
+        "name": "Username",
+        "xpath_fallback": "//table[1]/tbody[1]/tr[1]/td[1]/table[1]/tbody[1]/tr[2]/td[1]/table[1]/tbody[1]/tr[2]/td[2]/input[1]",
+        "reasoning": "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
+      },
+      "value": "agent",
+      "checkpoint": null
+    },
+    {
+      "step_id": "step_02",
+      "action": "type_text",
+      "locator": {
+        "role": "textbox",
+        "name": "Password",
+        "xpath_fallback": "//table[1]/tbody[1]/tr[1]/td[1]/table[1]/tbody[1]/tr[2]/td[1]/table[1]/tbody[1]/tr[3]/td[2]/input[1]",
+        "reasoning": "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
+      },
+      "value": "x",
+      "checkpoint": null
+    },
+    {
+      "step_id": "step_03",
+      "action": "click",
+      "locator": {
+        "role": "button",
+        "name": "Log In",
+        "xpath_fallback": "//table[1]/tbody[1]/tr[1]/td[1]/table[1]/tbody[1]/tr[2]/td[1]/table[1]/tbody[1]/tr[4]/td[1]/input[1]",
+        "reasoning": "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
+      },
+      "value": null,
+      "checkpoint": null
+    },
+    {
+      "step_id": "step_04",
+      "action": "type_text",
+      "locator": {
+        "role": "textbox",
+        "name": "Member ID",
+        "xpath_fallback": "//table[1]/tbody[1]/tr[1]/td[1]/table[1]/tbody[1]/tr[2]/td[1]/table[1]/tbody[1]/tr[2]/td[2]/input[1]",
+        "reasoning": "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
+      },
+      "value": "{member_id}",
+      "checkpoint": null
+    },
+    {
+      "step_id": "step_05",
+      "action": "click",
+      "locator": {
+        "role": "button",
+        "name": "Search",
+        "xpath_fallback": "//table[1]/tbody[1]/tr[1]/td[1]/table[1]/tbody[1]/tr[2]/td[1]/table[1]/tbody[1]/tr[3]/td[1]/input[1]",
+        "reasoning": "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
+      },
+      "value": null,
+      "checkpoint": null
+    },
+    {
+      "step_id": "step_06",
+      "action": "click",
+      "locator": {
+        "role": "link",
+        "name": "Open new sub-account",
+        "xpath_fallback": "//table[1]/tbody[1]/tr[1]/td[1]/table[1]/tbody[1]/tr[2]/td[1]/a[1]",
+        "reasoning": "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
+      },
+      "value": null,
+      "checkpoint": null
+    },
+    {
+      "step_id": "step_07",
+      "action": "select_option",
+      "locator": {
+        "role": "combobox",
+        "name": "Account Type",
+        "xpath_fallback": "//table[1]/tbody[1]/tr[1]/td[1]/table[1]/tbody[1]/tr[2]/td[1]/table[1]/tbody[1]/tr[2]/td[2]/select[1]",
+        "reasoning": "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
+      },
+      "value": "{acct_type}",
+      "checkpoint": null
+    },
+    {
+      "step_id": "step_08",
+      "action": "type_text",
+      "locator": {
+        "role": "textbox",
+        "name": "Initial Deposit",
+        "xpath_fallback": "//table[1]/tbody[1]/tr[1]/td[1]/table[1]/tbody[1]/tr[2]/td[1]/table[1]/tbody[1]/tr[3]/td[2]/input[1]",
+        "reasoning": "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
+      },
+      "value": "{deposit}",
+      "checkpoint": null
+    },
+    {
+      "step_id": "step_09",
+      "action": "click",
+      "locator": {
+        "role": "button",
+        "name": "Open Account",
+        "xpath_fallback": "//table[1]/tbody[1]/tr[1]/td[1]/table[1]/tbody[1]/tr[2]/td[1]/table[1]/tbody[1]/tr[4]/td[1]/input[1]",
+        "reasoning": "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
+      },
+      "value": null,
+      "checkpoint": null
+    }
+  ],
+  "success_checkpoint": "Sub-account opened successfully.",
+  "allowlist": [
+    "http://localhost:5001/*"
+  ],
+  "source_discovery_log": "discovery_20260816_183112_log.json"
+}

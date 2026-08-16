@@ -78,20 +78,28 @@ class DiscoveryAgent:
         page_state = state["_page_state"]  # type: ignore[typeddict-item]
         step_no = state["step"]
 
+        target_element = None
+        idx = decision.tool_input.get("element_index") if isinstance(decision.tool_input, dict) else None
+        if idx is not None:
+            for el in state["last_elements"]:
+                if el.index == idx:
+                    target_element = {"role": el.role, "name": el.name, "xpath": el.xpath}
+                    break
+
         if decision.tool_name == "finish_goal":
             state["status"] = "success"
             state["result"] = decision.tool_input
-            self._log(state, step_no, decision, {"ok": True, "detail": "goal reported complete"}, page_state)
+            self._log(state, step_no, decision, {"ok": True, "detail": "goal reported complete"}, page_state, target_element)
             return state
 
         if decision.tool_name == "give_up":
             state["status"] = "failed"
             state["result"] = {"reason": decision.tool_input.get("reason", "unspecified")}
-            self._log(state, step_no, decision, {"ok": False, "detail": "agent gave up"}, page_state)
+            self._log(state, step_no, decision, {"ok": False, "detail": "agent gave up"}, page_state, target_element)
             return state
 
         result = execute_action(self.page, decision.tool_name, decision.tool_input, state["last_elements"])
-        self._log(state, step_no, decision, result, page_state)
+        self._log(state, step_no, decision, result, page_state, target_element)
 
         state["step"] += 1
         if state["step"] >= state["max_steps"]:
@@ -101,7 +109,7 @@ class DiscoveryAgent:
             state["status"] = "running"
         return state
 
-    def _log(self, state, step_no, decision, result, page_state):
+    def _log(self, state, step_no, decision, result, page_state, target_element=None):
         state["log"].append(
             {
                 "step": step_no,
@@ -109,6 +117,7 @@ class DiscoveryAgent:
                 "url_before": page_state.url,
                 "tool": decision.tool_name,
                 "input": decision.tool_input,
+                "target_element": target_element,
                 "reasoning": decision.raw_text,
                 "result_ok": result["ok"],
                 "result_detail": result["detail"],

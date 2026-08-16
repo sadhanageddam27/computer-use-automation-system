@@ -37,8 +37,8 @@ ELEMENT_SCAN_JS = """
 
     if (el.tagName === 'INPUT' && el.type === 'submit') return el.value || 'Submit';
     if (el.placeholder) return el.placeholder.trim();
-    if (el.innerText && el.innerText.trim()) return el.innerText.trim().slice(0, 80);
-    if (el.value) return String(el.value).slice(0, 80);
+    if (el.tagName !== 'SELECT' && el.innerText && el.innerText.trim()) return el.innerText.trim().slice(0, 80);
+    if (el.tagName !== 'SELECT' && el.value) return String(el.value).slice(0, 80);
 
     // fall back to preceding table cell text - common in nested-table legacy layouts
     const row = el.closest('tr');

@@ -1,0 +1,21 @@
+{
+  "artifact": "open_member_subaccount_v1.json",
+  "inputs": {
+    "member_id": "00000",
+    "acct_type": "Savings",
+    "deposit": "75",
+    "password": "x"
+  },
+  "result": {
+    "status": "business_outcome",
+    "outputs": {},
+    "business_outcome_kind": "member_not_found",
+    "business_outcome_detail": "No record found",
+    "failed_step": null,
+    "expected": null,
+    "observed": null,
+    "recovered_conditions": [],
+    "steps_completed": 6
+  },
+  "screenshot": "replay_20260816_191308_final.png"
+}

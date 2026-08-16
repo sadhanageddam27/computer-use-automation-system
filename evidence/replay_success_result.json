@@ -1,0 +1,25 @@
+{
+  "artifact": "open_member_subaccount_v1.json",
+  "inputs": {
+    "member_id": "12345",
+    "acct_type": "Savings",
+    "deposit": "75",
+    "password": "x"
+  },
+  "result": {
+    "status": "success",
+    "outputs": {
+      "acct_type": "Savings",
+      "deposit": "75",
+      "subaccount_id": "40816485"
+    },
+    "business_outcome_kind": null,
+    "business_outcome_detail": null,
+    "failed_step": null,
+    "expected": null,
+    "observed": null,
+    "recovered_conditions": [],
+    "steps_completed": 10
+  },
+  "screenshot": "replay_20260816_191258_final.png"
+}

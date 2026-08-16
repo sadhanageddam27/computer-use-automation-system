@@ -18,8 +18,11 @@ it eventually succeeded.
 from __future__ import annotations
 
 import re
+from pathlib import Path
+from typing import Callable, Optional
 
 from src.artifacts.schema import ArtifactStep, Capability
+from src.escalation.handoff import request_intervention
 from src.replay.outcomes import detect_business_outcome
 from src.replay.result import RecoveredCondition, ReplayResult
 
@@ -74,9 +77,20 @@ def _resolve_locator(page, step: ArtifactStep):
 
 
 class ReplayEngine:
-    def __init__(self, page, timeout_ms: int = DEFAULT_TIMEOUT_MS):
+    def __init__(
+        self,
+        page,
+        timeout_ms: int = DEFAULT_TIMEOUT_MS,
+        escalate_on_hard_failure: bool = False,
+        evidence_dir: Optional[Path] = None,
+        operator_simulator: Optional[Callable[[object], None]] = None,
+    ):
         self.page = page
         self.timeout_ms = timeout_ms
+        self.escalate_on_hard_failure = escalate_on_hard_failure
+        self.evidence_dir = evidence_dir or Path("evidence")
+        # Testing hook only - see src/escalation/handoff.py docstring.
+        self.operator_simulator = operator_simulator
 
     def run(self, capability: Capability, inputs: dict) -> ReplayResult:
         recovered: list[RecoveredCondition] = []
@@ -85,7 +99,58 @@ class ReplayEngine:
         try:
             for i, step in enumerate(capability.steps):
                 self._handle_recoverable_conditions(capability, step, recovered)
-                self._execute_step(step, inputs)
+
+                try:
+                    self._execute_step(step, inputs)
+                except HardFailureError as exc:
+                    if not self.escalate_on_hard_failure:
+                        raise
+
+                    handoff = request_intervention(
+                        page=self.page,
+                        capability_name=capability.name,
+                        step_id=step.step_id,
+                        reason=f"expected {exc.expected}, observed {exc.observed}",
+                        evidence_dir=self.evidence_dir,
+                        operator_simulator=self.operator_simulator,
+                    )
+                    text = self.page.inner_text("body")
+
+                    if capability.success_checkpoint in text:
+                        # Human completed the remainder of the goal manually.
+                        recovered.append(
+                            RecoveredCondition(
+                                step_id=step.step_id,
+                                kind="human_intervention",
+                                detail=f"Operator completed the goal manually; resumed at {handoff.page_url_after}.",
+                            )
+                        )
+                        return self._finalize_success(capability, inputs, recovered, i + 1)
+
+                    outcome = detect_business_outcome(text)
+                    if outcome:
+                        kind, detail = outcome
+                        recovered.append(
+                            RecoveredCondition(
+                                step_id=step.step_id,
+                                kind="human_intervention",
+                                detail=f"Operator action surfaced a business outcome: {detail}",
+                            )
+                        )
+                        raise BusinessOutcomeSignal(kind, detail)
+
+                    # Retry the same step once now that a human has acted on
+                    # the live session - this is the "hand control back and
+                    # resume" path, not a fresh attempt from scratch.
+                    self._execute_step(step, inputs)
+                    recovered.append(
+                        RecoveredCondition(
+                            step_id=step.step_id,
+                            kind="human_intervention",
+                            detail=f"Operator resolved the blocking condition; automation resumed at {handoff.page_url_after}.",
+                        )
+                    )
+
                 completed = i + 1
                 self._check_business_outcome(step.step_id)
 
@@ -94,24 +159,7 @@ class ReplayEngine:
             # only appear as a RESULT of the final action, not before it.
             self._handle_recoverable_conditions(capability, capability.steps[-1], recovered)
 
-            final_text = self.page.inner_text("body")
-            if capability.success_checkpoint not in final_text:
-                raise HardFailureError(
-                    step_id=capability.steps[-1].step_id,
-                    expected=f"page to contain checkpoint text {capability.success_checkpoint!r}",
-                    observed=final_text[:200],
-                )
-
-            outputs = {k: _substitute("{" + k + "}", inputs) for k in capability.outputs}
-            extracted = self._extract_bonus_outputs(final_text)
-            outputs.update(extracted)
-
-            return ReplayResult(
-                status="success",
-                outputs=outputs,
-                recovered_conditions=recovered,
-                steps_completed=completed,
-            )
+            return self._finalize_success(capability, inputs, recovered, completed)
 
         except BusinessOutcomeSignal as exc:
             return ReplayResult(
@@ -131,6 +179,26 @@ class ReplayEngine:
                 recovered_conditions=recovered,
                 steps_completed=completed,
             )
+
+    def _finalize_success(self, capability: Capability, inputs: dict, recovered: list, completed: int) -> ReplayResult:
+        final_text = self.page.inner_text("body")
+        if capability.success_checkpoint not in final_text:
+            raise HardFailureError(
+                step_id=capability.steps[-1].step_id,
+                expected=f"page to contain checkpoint text {capability.success_checkpoint!r}",
+                observed=final_text[:200],
+            )
+
+        outputs = {k: _substitute("{" + k + "}", inputs) for k in capability.outputs}
+        extracted = self._extract_bonus_outputs(final_text)
+        outputs.update(extracted)
+
+        return ReplayResult(
+            status="success",
+            outputs=outputs,
+            recovered_conditions=recovered,
+            steps_completed=completed,
+        )
 
     def _execute_step(self, step: ArtifactStep, inputs: dict):
         if step.action == "navigate":

@@ -25,6 +25,7 @@ from src.artifacts.schema import ArtifactStep, Capability
 from src.escalation.handoff import request_intervention
 from src.replay.outcomes import detect_business_outcome
 from src.replay.result import RecoveredCondition, ReplayResult
+from src.safety.guardrails import is_url_allowed
 
 DEFAULT_TIMEOUT_MS = 5000
 
@@ -84,21 +85,48 @@ class ReplayEngine:
         escalate_on_hard_failure: bool = False,
         evidence_dir: Optional[Path] = None,
         operator_simulator: Optional[Callable[[object], None]] = None,
+        auto_confirm_risky: bool = False,
+        risky_action_confirmer: Optional[Callable[[Capability, ArtifactStep], bool]] = None,
     ):
         self.page = page
         self.timeout_ms = timeout_ms
         self.escalate_on_hard_failure = escalate_on_hard_failure
         self.evidence_dir = evidence_dir or Path("evidence")
-        # Testing hook only - see src/escalation/handoff.py docstring.
+        # Testing hooks only - see src/escalation/handoff.py docstring.
         self.operator_simulator = operator_simulator
+        self.auto_confirm_risky = auto_confirm_risky
+        self.risky_action_confirmer = risky_action_confirmer
 
     def run(self, capability: Capability, inputs: dict) -> ReplayResult:
         recovered: list[RecoveredCondition] = []
         completed = 0
 
         try:
+            if not is_url_allowed(capability.target.entry_url, capability.allowlist):
+                raise HardFailureError(
+                    step_id="entry",
+                    expected=f"entry_url within allowlist {capability.allowlist}",
+                    observed=capability.target.entry_url,
+                )
+
             for i, step in enumerate(capability.steps):
                 self._handle_recoverable_conditions(capability, step, recovered)
+
+                if step.action == "navigate":
+                    target_url = _substitute(step.value, inputs)
+                    if not is_url_allowed(target_url, capability.allowlist):
+                        raise HardFailureError(
+                            step_id=step.step_id,
+                            expected=f"navigate target within allowlist {capability.allowlist}",
+                            observed=target_url,
+                        )
+
+                if step.risky and not self._confirm_risky_step(capability, step):
+                    raise HardFailureError(
+                        step_id=step.step_id,
+                        expected="operator confirmation to proceed with a state-changing action",
+                        observed="confirmation declined or not given",
+                    )
 
                 try:
                     self._execute_step(step, inputs)
@@ -151,6 +179,13 @@ class ReplayEngine:
                         )
                     )
 
+                if not is_url_allowed(self.page.url, capability.allowlist):
+                    raise HardFailureError(
+                        step_id=step.step_id,
+                        expected=f"resulting page within allowlist {capability.allowlist}",
+                        observed=self.page.url,
+                    )
+
                 completed = i + 1
                 self._check_business_outcome(step.step_id)
 
@@ -179,6 +214,19 @@ class ReplayEngine:
                 recovered_conditions=recovered,
                 steps_completed=completed,
             )
+
+    def _confirm_risky_step(self, capability: Capability, step: ArtifactStep) -> bool:
+        if self.auto_confirm_risky:
+            return True
+        if self.risky_action_confirmer is not None:
+            return self.risky_action_confirmer(capability, step)
+
+        print("\n" + "!" * 60)
+        print(f"RISKY ACTION: {capability.name} / {step.step_id} ({step.action})")
+        print("This step is state-changing/irreversible. Confirm to proceed.")
+        print("!" * 60)
+        answer = input("Type 'yes' to proceed, anything else to decline: ").strip().lower()
+        return answer == "yes"
 
     def _finalize_success(self, capability: Capability, inputs: dict, recovered: list, completed: int) -> ReplayResult:
         final_text = self.page.inner_text("body")

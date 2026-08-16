@@ -31,6 +31,7 @@ from src.artifacts.schema import (
     LocatorStrategy,
     TargetConfig,
 )
+from src.safety.guardrails import REDACTED_PLACEHOLDER
 
 # Matches the older log format's result_detail strings for entries that
 # predate structured target_element logging, e.g.:
@@ -64,8 +65,11 @@ def build_capability(
     output_fields: dict[str, str],
     allowlist: list[str],
     source_log_name: str,
+    risky_steps: set[str] | None = None,
 ) -> Capability:
     steps: list[ArtifactStep] = []
+    auto_params_needed: set[str] = set()
+    action_step_ids: list[str] = []
 
     for entry in log["log"]:
         tool = entry["tool"]
@@ -73,6 +77,7 @@ def build_capability(
             continue  # finish_goal / give_up are run outcomes, not replay steps
 
         step_id = f"step_{entry['step']:02d}"
+        action_step_ids.append(step_id)
 
         if tool == "navigate":
             steps.append(
@@ -89,17 +94,26 @@ def build_capability(
         if target:
             role, elem_name = target["role"], target["name"]
             xpath = target.get("xpath")
+            input_type = target.get("input_type")
             reasoning = "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
         else:
             role, elem_name = _infer_role_name(entry)
             xpath = None
+            input_type = None
             reasoning = "Recovered from legacy log format (predates structured element capture) - role/name only, no XPath fallback available. Re-record to improve."
 
         locator = LocatorStrategy(role=role, name=elem_name, xpath_fallback=xpath, reasoning=reasoning)
 
         if tool == "type_text":
             raw_value = entry["input"]["text"]
-            value = _templatize(raw_value, params)
+            if raw_value == REDACTED_PLACEHOLDER or input_type == "password":
+                # Never bake a secret into the artifact, even a redacted
+                # placeholder - force it to be a required input supplied
+                # fresh at replay time instead.
+                value = "{password}"
+                auto_params_needed.add("password")
+            else:
+                value = _templatize(raw_value, params)
         elif tool == "select_option":
             raw_value = entry["input"]["option_text"]
             value = _templatize(raw_value, params)
@@ -108,6 +122,16 @@ def build_capability(
 
         steps.append(ArtifactStep(step_id=step_id, action=tool, locator=locator, value=value))
 
+    # Default risky-step heuristic: the last state-changing action before
+    # the goal's success checkpoint is treated as risky (irreversible)
+    # unless the caller specifies otherwise.
+    if risky_steps is None:
+        last_click = next((s for s in reversed(steps) if s.action in ("click",)), None)
+        risky_steps = {last_click.step_id} if last_click else set()
+    for step in steps:
+        if step.step_id in risky_steps:
+            step.risky = True
+
     finish_entry = next((e for e in log["log"] if e["tool"] == "finish_goal"), None)
     checkpoint = (
         finish_entry["input"].get("checkpoint_evidence", "goal completed")
@@ -115,11 +139,20 @@ def build_capability(
         else "goal completed"
     )
 
+    all_input_names = set(params.keys()) | auto_params_needed
+    inputs = {
+        k: FieldSchema(
+            type="string",
+            description="Sensitive - never stored, must be supplied fresh at replay time." if k == "password" else f"Input parameter '{k}'",
+        )
+        for k in all_input_names
+    }
+
     return Capability(
         name=name,
         description=description,
         target=TargetConfig(app=app_name, entry_url=target_url),
-        inputs={k: FieldSchema(type="string", description=f"Input parameter '{k}'") for k in params},
+        inputs=inputs,
         outputs={k: FieldSchema(type="string", description=f"Output field '{k}'") for k in output_fields},
         steps=steps,
         success_checkpoint=checkpoint,
@@ -136,6 +169,7 @@ def main():
     parser.add_argument("--target-url", default="http://localhost:5001/login")
     parser.add_argument("--app-name", default="legacy-bank-mock")
     parser.add_argument("--param", action="append", default=[], help="name=value, repeatable")
+    parser.add_argument("--risky-step", action="append", default=None, help="step_id to mark risky, repeatable. Defaults to the last click step if omitted.")
     parser.add_argument("--allow", action="append", default=None)
     parser.add_argument("--out-dir", default="artifacts")
     args = parser.parse_args()
@@ -159,6 +193,7 @@ def main():
         output_fields=output_fields,
         allowlist=allowlist,
         source_log_name=Path(args.log).name,
+        risky_steps=set(args.risky_step) if args.risky_step else None,
     )
 
     out_dir = Path(args.out_dir)

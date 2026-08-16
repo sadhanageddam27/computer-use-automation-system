@@ -15,6 +15,10 @@
       "type": "string",
       "description": "Input parameter 'acct_type'"
     },
+    "password": {
+      "type": "string",
+      "description": "Sensitive - never stored, must be supplied fresh at replay time."
+    },
     "deposit": {
       "type": "string",
       "description": "Input parameter 'deposit'"
@@ -36,7 +40,8 @@
       "action": "navigate",
       "locator": null,
       "value": "http://localhost:5001/login",
-      "checkpoint": null
+      "checkpoint": null,
+      "risky": false
     },
     {
       "step_id": "step_01",
@@ -48,7 +53,8 @@
         "reasoning": "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
       },
       "value": "agent",
-      "checkpoint": null
+      "checkpoint": null,
+      "risky": false
     },
     {
       "step_id": "step_02",
@@ -59,8 +65,9 @@
         "xpath_fallback": "//table[1]/tbody[1]/tr[1]/td[1]/table[1]/tbody[1]/tr[2]/td[1]/table[1]/tbody[1]/tr[3]/td[2]/input[1]",
         "reasoning": "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
       },
-      "value": "x",
-      "checkpoint": null
+      "value": "{password}",
+      "checkpoint": null,
+      "risky": false
     },
     {
       "step_id": "step_03",
@@ -72,7 +79,8 @@
         "reasoning": "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
       },
       "value": null,
-      "checkpoint": null
+      "checkpoint": null,
+      "risky": false
     },
     {
       "step_id": "step_04",
@@ -84,7 +92,8 @@
         "reasoning": "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
       },
       "value": "{member_id}",
-      "checkpoint": null
+      "checkpoint": null,
+      "risky": false
     },
     {
       "step_id": "step_05",
@@ -96,7 +105,8 @@
         "reasoning": "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
       },
       "value": null,
-      "checkpoint": null
+      "checkpoint": null,
+      "risky": false
     },
     {
       "step_id": "step_06",
@@ -108,7 +118,8 @@
         "reasoning": "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
       },
       "value": null,
-      "checkpoint": null
+      "checkpoint": null,
+      "risky": false
     },
     {
       "step_id": "step_07",
@@ -120,7 +131,8 @@
         "reasoning": "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
       },
       "value": "{acct_type}",
-      "checkpoint": null
+      "checkpoint": null,
+      "risky": false
     },
     {
       "step_id": "step_08",
@@ -132,7 +144,8 @@
         "reasoning": "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
       },
       "value": "{deposit}",
-      "checkpoint": null
+      "checkpoint": null,
+      "risky": false
     },
     {
       "step_id": "step_09",
@@ -144,12 +157,13 @@
         "reasoning": "Resolved from live accessibility scan at discovery time; role+name is primary, XPath is fallback only."
       },
       "value": null,
-      "checkpoint": null
+      "checkpoint": null,
+      "risky": true
     }
   ],
   "success_checkpoint": "Sub-account opened successfully.",
   "allowlist": [
     "http://localhost:5001/*"
   ],
-  "source_discovery_log": "discovery_20260816_183112_log.json"
+  "source_discovery_log": "discovery_20260816_190542_log.json"
 }

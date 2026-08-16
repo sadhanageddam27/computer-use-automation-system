@@ -17,6 +17,7 @@ from langgraph.graph import StateGraph, END
 
 from src.agent.browser_state import get_page_state, PageElement
 from src.agent.tools import execute_action
+from src.safety.guardrails import is_url_allowed, redact_if_sensitive
 
 
 class DiscoveryState(TypedDict):
@@ -35,11 +36,12 @@ class DiscoveryState(TypedDict):
 
 
 class DiscoveryAgent:
-    def __init__(self, page, decider, max_steps: int = 20, step_timeout_s: float = 30.0):
+    def __init__(self, page, decider, max_steps: int = 20, step_timeout_s: float = 30.0, allowlist: list[str] | None = None):
         self.page = page
         self.decider = decider
         self.max_steps = max_steps
         self.step_timeout_s = step_timeout_s
+        self.allowlist = allowlist or []
         self.graph = self._build_graph()
 
     def _build_graph(self):
@@ -83,7 +85,7 @@ class DiscoveryAgent:
         if idx is not None:
             for el in state["last_elements"]:
                 if el.index == idx:
-                    target_element = {"role": el.role, "name": el.name, "xpath": el.xpath}
+                    target_element = {"role": el.role, "name": el.name, "xpath": el.xpath, "input_type": el.input_type}
                     break
 
         if decision.tool_name == "finish_goal":
@@ -98,8 +100,28 @@ class DiscoveryAgent:
             self._log(state, step_no, decision, {"ok": False, "detail": "agent gave up"}, page_state, target_element)
             return state
 
+        if decision.tool_name == "navigate":
+            target_url = decision.tool_input.get("url", "")
+            if not is_url_allowed(target_url, self.allowlist):
+                state["status"] = "failed"
+                state["result"] = {"reason": f"blocked by allowlist policy: {target_url} is not permitted"}
+                self._log(
+                    state, step_no, decision,
+                    {"ok": False, "detail": f"BLOCKED: navigate target {target_url} not in allowlist {self.allowlist}"},
+                    page_state, target_element,
+                )
+                return state
+
         result = execute_action(self.page, decision.tool_name, decision.tool_input, state["last_elements"])
         self._log(state, step_no, decision, result, page_state, target_element)
+
+        # Defense in depth: even actions that don't explicitly navigate
+        # (a click on a link, an unexpected redirect) can move the page
+        # outside the allowlist. Check where we actually ended up.
+        if result["ok"] and not is_url_allowed(self.page.url, self.allowlist):
+            state["status"] = "failed"
+            state["result"] = {"reason": f"blocked by allowlist policy: ended up at {self.page.url}, which is not permitted"}
+            return state
 
         state["step"] += 1
         if state["step"] >= state["max_steps"]:
@@ -110,13 +132,17 @@ class DiscoveryAgent:
         return state
 
     def _log(self, state, step_no, decision, result, page_state, target_element=None):
+        logged_input = dict(decision.tool_input) if isinstance(decision.tool_input, dict) else decision.tool_input
+        if isinstance(logged_input, dict) and "text" in logged_input and target_element:
+            logged_input["text"] = redact_if_sensitive(logged_input["text"], target_element.get("input_type"))
+
         state["log"].append(
             {
                 "step": step_no,
                 "timestamp": time.time(),
                 "url_before": page_state.url,
                 "tool": decision.tool_name,
-                "input": decision.tool_input,
+                "input": logged_input,
                 "target_element": target_element,
                 "reasoning": decision.raw_text,
                 "result_ok": result["ok"],

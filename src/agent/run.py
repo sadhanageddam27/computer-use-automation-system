@@ -42,10 +42,16 @@ def main():
     parser.add_argument("--member-id", default="12345")
     parser.add_argument("--acct-type", default="Savings")
     parser.add_argument("--deposit", default="100")
+    parser.add_argument("--allow", action="append", default=None, help="Allowlist glob pattern, repeatable. Defaults to the start URL's origin.")
     args = parser.parse_args()
 
     EVIDENCE_DIR.mkdir(exist_ok=True)
     run_id = time.strftime("discovery_%Y%m%d_%H%M%S")
+
+    from urllib.parse import urlparse
+    origin = urlparse(args.start_url)
+    default_allowlist = [f"{origin.scheme}://{origin.netloc}/*"]
+    allowlist = args.allow if args.allow else default_allowlist
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=args.headless)
@@ -59,7 +65,7 @@ def main():
         else:
             decider = ClaudeDecider()
 
-        agent = DiscoveryAgent(page, decider, max_steps=args.max_steps)
+        agent = DiscoveryAgent(page, decider, max_steps=args.max_steps, allowlist=allowlist)
         final_state = agent.run(args.goal)
 
         screenshot_path = EVIDENCE_DIR / f"{run_id}_final.png"

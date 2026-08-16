@@ -48,6 +48,14 @@ class ArtifactStep(BaseModel):
     checkpoint: Optional[str] = Field(
         None, description="Assertion this step's result should satisfy before continuing (URL fragment or visible text)."
     )
+    risky: bool = Field(
+        False,
+        description=(
+            "Marks a state-changing/irreversible action (e.g. final form submission). "
+            "The replay engine requires explicit confirmation before executing a risky step "
+            "unless auto-confirmation is deliberately enabled."
+        ),
+    )
 
 
 class FieldSchema(BaseModel):

@@ -41,6 +41,7 @@ def main():
     parser.add_argument("--simulate-dialog", action="store_true", help="Testing hook: inject the target app's unexpected-confirmation-dialog condition.")
     parser.add_argument("--simulate-session-expiry", action="store_true", help="Testing hook: inject the target app's session-expiry condition mid-flow.")
     parser.add_argument("--escalate-on-failure", action="store_true", help="On a hard failure, pause and request human intervention instead of failing immediately.")
+    parser.add_argument("--auto-confirm-risky", action="store_true", help="Skip interactive confirmation for risky/irreversible steps (use for CI/automated testing only).")
     args = parser.parse_args()
 
     inputs = dict(p.split("=", 1) for p in args.input)
@@ -82,7 +83,12 @@ def main():
 
             page.on("load", _maybe_expire)
 
-        engine = ReplayEngine(page, escalate_on_hard_failure=args.escalate_on_failure, evidence_dir=EVIDENCE_DIR)
+        engine = ReplayEngine(
+            page,
+            escalate_on_hard_failure=args.escalate_on_failure,
+            evidence_dir=EVIDENCE_DIR,
+            auto_confirm_risky=args.auto_confirm_risky,
+        )
         result = engine.run(capability, inputs)
 
         screenshot_path = EVIDENCE_DIR / f"{run_id}_final.png"

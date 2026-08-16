@@ -35,15 +35,28 @@ Runs at http://localhost:5001
 
 ## Demo path
 
-<!-- TODO: fill in with exact commands once the agent loop (step 2) exists -->
-
 ```bash
-# Run the discovery agent on a goal
-python -m src.agent.run --goal "look up member 12345 and open a savings sub-account"
+# 1. Run the discovery agent on a goal (needs ANTHROPIC_API_KEY set)
+python -m src.agent.run \
+  --goal "Log in and open a savings sub-account for member 12345" \
+  --member-id 12345 --acct-type Savings --deposit 100
 
-# Replay the resulting artifact
-python -m src.replay.run --artifact artifacts/open_subaccount.json --member_id 20200 --acct_type Savings --deposit 50
+# 2. Build a reusable artifact from the resulting discovery log
+python -m src.artifacts.build_from_log \
+  --log evidence/<the discovery log just written> \
+  --name open_member_subaccount \
+  --param member_id=12345 --param acct_type=Savings --param deposit=100 \
+  --allow "http://localhost:5001/*"
+
+# 3. Replay the artifact deterministically - no LLM involved
+python -m src.replay.run \
+  --artifact artifacts/open_member_subaccount_v1.json \
+  --input member_id=12345 --input acct_type=Savings --input deposit=100 --input password=x \
+  --auto-confirm-risky   # omit this flag to get a real interactive confirmation prompt
 ```
+
+No API key is needed for steps 2 and 3, or to test step 1's harness end to end via
+`python -m src.agent.run --dry-run ...` (uses a scripted decider instead of Claude).
 
 ## Repo layout
 
@@ -53,6 +66,8 @@ src/agent/        LLM-driven discovery loop
 src/artifacts/    artifact schema + storage
 src/replay/       deterministic replay engine
 src/escalation/   human-in-the-loop handoff
+src/safety/       allowlist enforcement + secret redaction
+artifacts/        saved capability artifacts
 evidence/         saved artifact + logs from a discovery run and a replay run
 REPORT.md         design write-up
 ```
